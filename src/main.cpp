@@ -87,9 +87,9 @@ SDLWrapper createSDLWrapper(Resources& resources) {
         exit(1);
     }
 
-    FPSmanager* locFpsManager = static_cast<FPSmanager *>(malloc(sizeof(FPSmanager)));
-    SDL_initFramerate(locFpsManager);
-    SDL_setFramerate(locFpsManager, 60);
+    FPSmanager* fps_manager = static_cast<FPSmanager *>(malloc(sizeof(FPSmanager)));
+    SDL_initFramerate(fps_manager);
+    SDL_setFramerate(fps_manager, 60);
 
     SDL_Texture* bomb = IMG_LoadTexture(renderer, "resources/images/bomb.png");
     if (bomb == nullptr) {
@@ -99,7 +99,7 @@ SDLWrapper createSDLWrapper(Resources& resources) {
 
     resources._bomb = bomb;
 
-    const SDLWrapper wrapper(window, renderer, text_engine, resources, locFpsManager);
+    const SDLWrapper wrapper(window, renderer, text_engine, resources, fps_manager);
     return wrapper;
 }
 

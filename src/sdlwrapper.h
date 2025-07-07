@@ -23,42 +23,21 @@ private:
 
 public:
     SDLWrapper(SDL_Window *window, SDL_Renderer *renderer, TTF_TextEngine *text_engine,
-               const Resources &resources, FPSmanager *fps_manager)
-        : _resources(resources) {
-        _window = window;
-        SDL_GetWindowSize(_window, &_width, &_height);
-        _renderer = renderer;
-        _text_engine = text_engine;
-        _fps_manager = fps_manager;
-    }
+               const Resources &resources, FPSmanager *fps_manager);
 
-    SDL_Window *getWindow() const {
-        return _window;
-    }
+    SDL_Window *getWindow() const;
 
-    int getWindowWidth() const {
-        return _width;
-    }
+    int getWindowWidth() const;
 
-    int getWindowHeight() const {
-        return _height;
-    }
+    int getWindowHeight() const;
 
-    SDL_Renderer *getRenderer() const {
-        return _renderer;
-    }
+    SDL_Renderer *getRenderer() const;
 
-    TTF_TextEngine *getTextEngine() const {
-        return _text_engine;
-    }
+    TTF_TextEngine *getTextEngine() const;
 
-    FPSmanager *getFPSManager() const {
-        return _fps_manager;
-    }
+    FPSmanager *getFPSManager() const;
 
-    const Resources &getResources() const {
-        return _resources;
-    }
+    const Resources &getResources() const;
 };
 
 

@@ -10,11 +10,15 @@
 
 class Resources {
 public:
+    // Before init
     TTF_Font* _font;
     Mix_Chunk* _count_sound;
     Mix_Chunk* _explosion_sound;
+
+    // After window and renderer init
     SDL_Texture* _bomb;
 
+    // Before init
     Resources(TTF_Font* font, Mix_Chunk* count_sound, Mix_Chunk* explosion_sound) {
         _font = font;
         _count_sound = count_sound;
