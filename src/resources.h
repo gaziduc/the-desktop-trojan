@@ -14,16 +14,13 @@ public:
     TTF_Font* _font;
     Mix_Chunk* _count_sound;
     Mix_Chunk* _explosion_sound;
+    Mix_Chunk* _error_sound;
 
     // After window and renderer init
     SDL_Texture* _bomb;
 
     // Before init
-    Resources(TTF_Font* font, Mix_Chunk* count_sound, Mix_Chunk* explosion_sound) {
-        _font = font;
-        _count_sound = count_sound;
-        _explosion_sound = explosion_sound;
-    }
+    Resources(TTF_Font* font, Mix_Chunk* count_sound, Mix_Chunk* explosion_sound, Mix_Chunk* error_sound);
 };
 
 

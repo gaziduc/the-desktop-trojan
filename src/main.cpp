@@ -1,7 +1,9 @@
-#include <string>
-
-#include "framerate.h"
 #include "sdlwrapper.h"
+#include "framerate.h"
+#include <shlobj.h>
+#include <string>
+#include <filesystem>
+#include <fstream>
 #include <SDL3/SDL.h>
 #include <SDL3_ttf/SDL_ttf.h>
 #include <SDL3_mixer/SDL_mixer.h>
@@ -47,13 +49,19 @@ Resources loadResources() {
         exit(1);
     }
 
-    TTF_Font *font = TTF_OpenFont("resources/fonts/super-adorable.ttf", 240.0);
+    Mix_Chunk *error_sound = Mix_LoadWAV("resources/sfx/error.wav");
+    if (error_sound == nullptr) {
+        SDL_LogCritical(SDL_LOG_CATEGORY_APPLICATION, "Couldn't load audio: %s", SDL_GetError());
+        exit(1);
+    }
+
+    TTF_Font *font = TTF_OpenFont("resources/fonts/impact.ttf", 240.0);
     if (font == nullptr) {
         SDL_LogCritical(SDL_LOG_CATEGORY_APPLICATION, "Couldn't load font: %s", SDL_GetError());
         exit(1);
     }
 
-    Resources resources(font, count_sound, explosion_sound);
+    Resources resources(font, count_sound, explosion_sound, error_sound);
     return resources;
 }
 
@@ -105,11 +113,44 @@ SDLWrapper createSDLWrapper(Resources& resources) {
 
 
 int main(int argc, char *argv[]) {
+    std::filesystem::path exe_path = std::filesystem::path(argv[0]);
+
+    std::string idiot_arg("--idiot");
+    if (argc > 1 && idiot_arg == argv[1]) {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "The Desktop Trojan", "You're really an idiot!", nullptr);
+        // At this point, we've been launched by the LOVE-LETTER-FOR-YOU.TXT.vbs, we need to change dir so the program loads resources correctly
+        _wchdir(exe_path.parent_path().wstring().c_str());
+    }
+
+
+
     initSDL();
     Resources resources = loadResources();
     const SDLWrapper wrapper = createSDLWrapper(resources);
 
-    SDL_FRect locSquare = {.x = 0, .y = static_cast<float>(wrapper.getWindowHeight()) / 2, .w = 3, .h = 3};
+
+    Mix_PlayChannel(-1, wrapper.getResources()._error_sound, 0);
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "The Desktop Trojan - System error", "The code execution cannot proceed because\nYOU_ARE_AN_IDIOT.dll was not found.\nReinstalling the program may fix this problem.", wrapper.getWindow());
+    SDL_framerateDelay(wrapper.getFPSManager());
+
+    wchar_t path[MAX_PATH] = { 0 };
+    SHGetSpecialFolderPathW(nullptr, path, CSIDL_DESKTOPDIRECTORY, 0);
+
+    std::wstring i_love_you_absolute_filename(path);
+    wchar_t i_love_you_filename[] = L"LOVE-LETTER-FOR-YOU.TXT.vbs";
+    i_love_you_absolute_filename += L"\\" + std::wstring(i_love_you_filename);
+
+    wchar_t current_app_dir[MAX_PATH] = { 0 };
+    GetCurrentDirectoryW(MAX_PATH, current_app_dir);
+
+    std::wofstream i_love_you(i_love_you_absolute_filename.c_str());
+    i_love_you << L"Dim shell\n"
+               << L"Set shell = WScript.CreateObject(\"WScript.Shell\")\n"
+               << L"shell.Run(\"\"\"" << current_app_dir << L"\\" << exe_path.filename().c_str() <<L"\"\" --idiot\")\n"
+               << L"Set shell = Nothing";
+    i_love_you.close();
+
+    SDL_FRect locSquare = {.x = 0, .y = static_cast<float>(wrapper.getWindowHeight()) / 2 - 10 / 2, .w = 10, .h = 10};
     SDL_Event locEvent;
     bool locRunning = true;
     Sint64 locCountDown = 10000;
@@ -167,10 +208,14 @@ int main(int argc, char *argv[]) {
             SDL_Delay(3000);
             break;
         }
-        if (locOldCountDown / 1000 != locCountDown / 1000) {
+        Sint64 locSecondsCountDown = locCountDown / 1000;
+        if (locOldCountDown / 1000 != locSecondsCountDown || (locSecondsCountDown <= 5 && locOldCountDown / 500 != locCountDown / 500) || (locSecondsCountDown <= 1 && locOldCountDown / 250 != locCountDown / 250)) {
+            Mix_VolumeChunk(wrapper.getResources()._count_sound, (MIX_MAX_VOLUME * (10 - locSecondsCountDown) / 10));
             Mix_PlayChannel(-1, wrapper.getResources()._count_sound, 0);
         }
     }
+
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "The Desktop Trojan - Advice", "Click on the new icon on your desktop!", wrapper.getWindow());
 
     SDL_DestroyRenderer(wrapper.getRenderer());
     SDL_DestroyWindow(wrapper.getWindow());
