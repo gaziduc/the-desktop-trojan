@@ -4,23 +4,31 @@
 
 #ifndef RESOURCES_H
 #define RESOURCES_H
+
+#include <string>
 #include <SDL3_mixer/SDL_mixer.h>
 #include <SDL3_ttf/SDL_ttf.h>
+
+#include "animation.h"
 
 
 class Resources {
 public:
-    // Before init
     TTF_Font* _font;
     Mix_Chunk* _count_sound;
     Mix_Chunk* _explosion_sound;
     Mix_Chunk* _error_sound;
-
-    // After window and renderer init
     SDL_Texture* _bomb;
+    SDL_Texture* _explosion;
 
-    // Before init
-    Resources(TTF_Font* font, Mix_Chunk* count_sound, Mix_Chunk* explosion_sound, Mix_Chunk* error_sound);
+    Resources(TTF_Font* font, Mix_Chunk* count_sound, Mix_Chunk* explosion_sound, Mix_Chunk* error_sound, SDL_Texture* bomb, SDL_Texture* explosion);
+
+    static Mix_Chunk* loadSound(const std::string &filepath);
+
+    static SDL_Texture* loadImage(const SDLWrapper& wrapper, const std::string &filepath);
+
+    static TTF_Font* loadFont(const std::string &filepath, float ptsize);
+
 };
 
 

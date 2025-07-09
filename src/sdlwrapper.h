@@ -16,14 +16,12 @@ private:
     SDL_Window *_window;
     int _width;
     int _height;
-    SDL_Renderer *_renderer;
-    TTF_TextEngine *_text_engine;
-    FPSmanager *_fps_manager;
-    Resources _resources;
+    SDL_Renderer*_renderer;
+    TTF_TextEngine* _text_engine;
+    FPSmanager* _fps_manager;
 
 public:
-    SDLWrapper(SDL_Window *window, SDL_Renderer *renderer, TTF_TextEngine *text_engine,
-               const Resources &resources, FPSmanager *fps_manager);
+    SDLWrapper(SDL_Window *window, SDL_Renderer *renderer, TTF_TextEngine *text_engine, FPSmanager *fps_manager);
 
     SDL_Window *getWindow() const;
 
@@ -36,8 +34,6 @@ public:
     TTF_TextEngine *getTextEngine() const;
 
     FPSmanager *getFPSManager() const;
-
-    const Resources &getResources() const;
 };
 
 

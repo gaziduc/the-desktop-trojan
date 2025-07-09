@@ -1,5 +1,8 @@
+#include <cmath>
+
 #include "sdlwrapper.h"
 #include "framerate.h"
+#include "resources.h"
 #include <shlobj.h>
 #include <string>
 #include <filesystem>
@@ -7,7 +10,8 @@
 #include <SDL3/SDL.h>
 #include <SDL3_ttf/SDL_ttf.h>
 #include <SDL3_mixer/SDL_mixer.h>
-#include <SDL3_image/SDL_image.h>
+
+#include "events.h"
 
 
 void initSDL() {
@@ -36,36 +40,19 @@ void initSDL() {
     }
 }
 
-Resources loadResources() {
-    Mix_Chunk *count_sound = Mix_LoadWAV("resources/sfx/count.wav");
-    if (count_sound == nullptr) {
-        SDL_LogCritical(SDL_LOG_CATEGORY_APPLICATION, "Couldn't load audio: %s", SDL_GetError());
-        exit(1);
-    }
+Resources loadResources(const SDLWrapper &wrapper) {
+    Mix_Chunk *count_sound = Resources::loadSound("resources/sfx/count.wav");
+    Mix_Chunk *explosion_sound = Resources::loadSound("resources/sfx/explosion.wav");
+    Mix_Chunk *error_sound = Resources::loadSound("resources/sfx/error.wav");
+    TTF_Font *font = Resources::loadFont("resources/fonts/impact.ttf", 200);
+    SDL_Texture *bomb = Resources::loadImage(wrapper, "resources/images/bomb.png");
+    SDL_Texture *explosion = Resources::loadImage(wrapper, "resources/images/explosion.png");
 
-    Mix_Chunk *explosion_sound = Mix_LoadWAV("resources/sfx/explosion.wav");
-    if (explosion_sound == nullptr) {
-        SDL_LogCritical(SDL_LOG_CATEGORY_APPLICATION, "Couldn't load audio: %s", SDL_GetError());
-        exit(1);
-    }
-
-    Mix_Chunk *error_sound = Mix_LoadWAV("resources/sfx/error.wav");
-    if (error_sound == nullptr) {
-        SDL_LogCritical(SDL_LOG_CATEGORY_APPLICATION, "Couldn't load audio: %s", SDL_GetError());
-        exit(1);
-    }
-
-    TTF_Font *font = TTF_OpenFont("resources/fonts/impact.ttf", 240.0);
-    if (font == nullptr) {
-        SDL_LogCritical(SDL_LOG_CATEGORY_APPLICATION, "Couldn't load font: %s", SDL_GetError());
-        exit(1);
-    }
-
-    Resources resources(font, count_sound, explosion_sound, error_sound);
+    Resources resources(font, count_sound, explosion_sound, error_sound, bomb, explosion);
     return resources;
 }
 
-SDLWrapper createSDLWrapper(Resources& resources) {
+SDLWrapper createSDLWrapper() {
     SDL_DisplayID primary_display_id = SDL_GetPrimaryDisplay();
     if (primary_display_id == 0) {
         SDL_LogCritical(SDL_LOG_CATEGORY_APPLICATION, "Couldn't get primary display ID: %s", SDL_GetError());
@@ -78,7 +65,7 @@ SDLWrapper createSDLWrapper(Resources& resources) {
     }
 
     SDL_Window *window = SDL_CreateWindow("The Desktop Trojan", display_mode->w, display_mode->h,
-                                             SDL_WINDOW_FULLSCREEN | SDL_WINDOW_TRANSPARENT);
+                                          SDL_WINDOW_FULLSCREEN | SDL_WINDOW_TRANSPARENT);
     if (window == nullptr) {
         SDL_LogCritical(SDL_LOG_CATEGORY_APPLICATION, "Couldn't create window: %s", SDL_GetError());
         exit(1);
@@ -95,83 +82,97 @@ SDLWrapper createSDLWrapper(Resources& resources) {
         exit(1);
     }
 
-    FPSmanager* fps_manager = static_cast<FPSmanager *>(malloc(sizeof(FPSmanager)));
+    FPSmanager *fps_manager = static_cast<FPSmanager *>(malloc(sizeof(FPSmanager)));
     SDL_initFramerate(fps_manager);
     SDL_setFramerate(fps_manager, 60);
 
-    SDL_Texture* bomb = IMG_LoadTexture(renderer, "resources/images/bomb.png");
-    if (bomb == nullptr) {
-        SDL_LogCritical(SDL_LOG_CATEGORY_APPLICATION, "Couldn't load image: %s", SDL_GetError());
-        exit(1);
-    }
-
-    resources._bomb = bomb;
-
-    const SDLWrapper wrapper(window, renderer, text_engine, resources, fps_manager);
+    const SDLWrapper wrapper(window, renderer, text_engine, fps_manager);
     return wrapper;
 }
 
 
 int main(int argc, char *argv[]) {
     std::filesystem::path exe_path = std::filesystem::path(argv[0]);
+    std::string idiotArg("--idiot");
+    bool isIdiot = argc > 1 && idiotArg == argv[1];
 
-    std::string idiot_arg("--idiot");
-    if (argc > 1 && idiot_arg == argv[1]) {
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "The Desktop Trojan", "You're really an idiot!", nullptr);
+    Sint64 locCountDown;
+
+    if (isIdiot) {
         // At this point, we've been launched by the LOVE-LETTER-FOR-YOU.TXT.vbs, we need to change dir so the program loads resources correctly
         _wchdir(exe_path.parent_path().wstring().c_str());
+
+        locCountDown = 4000;
+    } else {
+        locCountDown = 10000;
     }
 
-
+    bool isReallyIdiot = std::filesystem::exists("Tchernobyl.txt");
+    if (isReallyIdiot) {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_WARNING, "The Desktop Trojan", "End of the demo. Thanks for playing!", nullptr);
+        return 0;
+    }
 
     initSDL();
-    Resources resources = loadResources();
-    const SDLWrapper wrapper = createSDLWrapper(resources);
+    const SDLWrapper wrapper = createSDLWrapper();
+    const Resources resources = loadResources(wrapper);
 
+    if (isIdiot) {
+        for (int i = 0; i < 15; i++) {
+            Mix_PlayChannel(-1, resources._error_sound, 0);
+            SDL_Delay(100);
+        }
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "The Desktop Trojan", "You're really an idiot!", nullptr);
+    }
 
-    Mix_PlayChannel(-1, wrapper.getResources()._error_sound, 0);
-    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "The Desktop Trojan - System error", "The code execution cannot proceed because\nYOU_ARE_AN_IDIOT.dll was not found.\nReinstalling the program may fix this problem.", wrapper.getWindow());
+    Mix_PlayChannel(-1, resources._error_sound, 0);
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "The Desktop Trojan - System error",
+                             "The code execution cannot proceed because\nYOU_ARE_AN_IDIOT.dll was not found.\nReinstalling the program may fix this problem.",
+                             wrapper.getWindow());
     SDL_framerateDelay(wrapper.getFPSManager());
 
-    wchar_t path[MAX_PATH] = { 0 };
+    wchar_t path[MAX_PATH] = {0};
     SHGetSpecialFolderPathW(nullptr, path, CSIDL_DESKTOPDIRECTORY, 0);
 
     std::wstring i_love_you_absolute_filename(path);
     wchar_t i_love_you_filename[] = L"LOVE-LETTER-FOR-YOU.TXT.vbs";
     i_love_you_absolute_filename += L"\\" + std::wstring(i_love_you_filename);
 
-    wchar_t current_app_dir[MAX_PATH] = { 0 };
+    wchar_t current_app_dir[MAX_PATH] = {0};
     GetCurrentDirectoryW(MAX_PATH, current_app_dir);
 
     std::wofstream i_love_you(i_love_you_absolute_filename.c_str());
     i_love_you << L"Dim shell\n"
-               << L"Set shell = WScript.CreateObject(\"WScript.Shell\")\n"
-               << L"shell.Run(\"\"\"" << current_app_dir << L"\\" << exe_path.filename().c_str() <<L"\"\" --idiot\")\n"
-               << L"Set shell = Nothing";
+            << L"Set shell = WScript.CreateObject(\"WScript.Shell\")\n"
+            << L"shell.Run(\"\"\"" << current_app_dir << L"\\" << exe_path.filename().c_str() << L"\"\" --idiot\")\n"
+            << L"Set shell = Nothing";
     i_love_you.close();
 
-    SDL_FRect locSquare = {.x = 0, .y = static_cast<float>(wrapper.getWindowHeight()) / 2 - 10 / 2, .w = 10, .h = 10};
-    SDL_Event locEvent;
-    bool locRunning = true;
-    Sint64 locCountDown = 10000;
 
-    while (locRunning) {
-        while (SDL_PollEvent(&locEvent)) {
-            switch (locEvent.type) {
-                case SDL_EVENT_QUIT: // triggered on window close
-                    locRunning = false;
-                    break;
-            }
-        }
+    float bomb_w;
+    float bomb_h;
+    SDL_GetTextureSize(resources._bomb, &bomb_w, &bomb_h);
+    SDL_FRect dst_rect = {
+        .x = wrapper.getWindowWidth() / 2 - bomb_w / 2, .y = wrapper.getWindowHeight() / 2 - bomb_h / 2, .w = bomb_w,
+        .h = bomb_h
+    };
 
-        locSquare.x++;
+
+    int red = 0;
+    bool isRedGoingUp = true;
+
+    while (locCountDown > 0) {
+        Events::handleQuitEvent(wrapper, resources);
 
         // Clear screen
-        SDL_SetRenderDrawColor(wrapper.getRenderer(), 0, 0, 0, 0);
+        SDL_SetRenderDrawColor(wrapper.getRenderer(), red, 0, 0, 0);
         SDL_RenderClear(wrapper.getRenderer());
 
+        // Draw bomb
+        SDL_RenderTexture(wrapper.getRenderer(), resources._bomb, nullptr, &dst_rect);
+
         std::string locCountString = std::to_string(locCountDown / 1000);
-        TTF_Text *locText = TTF_CreateText(wrapper.getTextEngine(), wrapper.getResources()._font, locCountString.c_str(), 0);
+        TTF_Text *locText = TTF_CreateText(wrapper.getTextEngine(), resources._font, locCountString.c_str(), 0);
         if (locText == nullptr) {
             SDL_LogCritical(SDL_LOG_CATEGORY_APPLICATION, "Couldn't create text: %s", SDL_GetError());
             return 1;
@@ -180,52 +181,89 @@ int main(int argc, char *argv[]) {
         int w;
         int h;
         TTF_GetTextSize(locText, &w, &h);
-
-        float bomb_w;
-        float bomb_h;
-        SDL_GetTextureSize(wrapper.getResources()._bomb, &bomb_w, &bomb_h);
-        SDL_FRect dst_rect = { .x = wrapper.getWindowWidth() / 2 - bomb_w / 2, .y = wrapper.getWindowHeight() / 2 - bomb_h / 2, .w = bomb_w, .h = bomb_h };
-        SDL_RenderTexture(wrapper.getRenderer(), wrapper.getResources()._bomb, nullptr, &dst_rect);
-
         TTF_DrawRendererText(
-            locText, static_cast<float>(wrapper.getWindowWidth()) / 2 - static_cast<float>(w) / 2,
-            static_cast<float>(wrapper.getWindowHeight()) / 2 - static_cast<float>(h) / 2 + 30);
+            locText,
+            std::ceil(static_cast<float>(wrapper.getWindowWidth()) / 2 - static_cast<float>(w) / 2),
+            std::ceil(static_cast<float>(wrapper.getWindowHeight()) / 2 - static_cast<float>(h) / 2 + 30));
 
         TTF_DestroyText(locText);
-
-
-
-        SDL_SetRenderDrawColor(wrapper.getRenderer(), 255, 255, 255, 255);
-        SDL_RenderFillRect(wrapper.getRenderer(), &locSquare);
 
         // Draw everything to screen
         SDL_RenderPresent(wrapper.getRenderer());
 
         Uint64 locOldCountDown = locCountDown;
-        locCountDown -= static_cast<Sint64>(SDL_framerateDelay(wrapper.getFPSManager()));
-        if (locCountDown <= 0) {
-            Mix_PlayChannel(-1, wrapper.getResources()._explosion_sound, 0);
-            SDL_Delay(3000);
-            break;
-        }
+        Uint64 millisecondsPassed = SDL_framerateDelay(wrapper.getFPSManager());
+        locCountDown -= static_cast<Sint64>(millisecondsPassed);
         Sint64 locSecondsCountDown = locCountDown / 1000;
-        if (locOldCountDown / 1000 != locSecondsCountDown || (locSecondsCountDown <= 5 && locOldCountDown / 500 != locCountDown / 500) || (locSecondsCountDown <= 1 && locOldCountDown / 250 != locCountDown / 250)) {
-            Mix_VolumeChunk(wrapper.getResources()._count_sound, (MIX_MAX_VOLUME * (10 - locSecondsCountDown) / 10));
-            Mix_PlayChannel(-1, wrapper.getResources()._count_sound, 0);
+        if (locOldCountDown / 1000 != locSecondsCountDown || (
+                locSecondsCountDown <= 5 && locOldCountDown / 500 != locCountDown / 500) || (
+                locSecondsCountDown <= 1 && locOldCountDown / 250 != locCountDown / 250)) {
+            Mix_VolumeChunk(resources._count_sound, (MIX_MAX_VOLUME * (10 - locSecondsCountDown) / 10));
+            Mix_PlayChannel(-1, resources._count_sound, 0);
+        }
+
+        if (isRedGoingUp) {
+            red += millisecondsPassed / 2;
+            if (red > 200) {
+                red = 200;
+                isRedGoingUp = false;
+            }
+        } else {
+            red -= millisecondsPassed / 2;
+            if (red < 20) {
+                red = 20;
+                isRedGoingUp = true;
+            }
         }
     }
 
-    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "The Desktop Trojan - Advice", "Click on the new icon on your desktop!", wrapper.getWindow());
+    Mix_PlayChannel(-1, resources._explosion_sound, 0);
 
-    SDL_DestroyRenderer(wrapper.getRenderer());
-    SDL_DestroyWindow(wrapper.getWindow());
-    TTF_DestroyRendererTextEngine(wrapper.getTextEngine());
-    TTF_CloseFont(wrapper.getResources()._font);
-    TTF_Quit();
-    Mix_FreeChunk(wrapper.getResources()._count_sound);
-    Mix_FreeChunk(wrapper.getResources()._explosion_sound);
-    Mix_CloseAudio();
-    Mix_Quit();
-    SDL_Quit();
+    locCountDown = 2000;
+    dst_rect.x = wrapper.getWindowWidth() / 2;
+    dst_rect.y = wrapper.getWindowHeight() / 2;
+    dst_rect.w = 20;
+    dst_rect.h = 20;
+    while (locCountDown > 0) {
+        Events::handleQuitEvent(wrapper, resources);
+
+        // Clear screen
+        SDL_SetRenderDrawColor(wrapper.getRenderer(), red, 0, 0, 0);
+        SDL_RenderClear(wrapper.getRenderer());
+
+        // Draw explosion
+        SDL_RenderTexture(wrapper.getRenderer(), resources._explosion, nullptr, &dst_rect);
+
+        // Draw everything to screen
+        SDL_RenderPresent(wrapper.getRenderer());
+
+        // Delay
+        locCountDown -= static_cast<Sint64>(SDL_framerateDelay(wrapper.getFPSManager()));
+
+        dst_rect.x -= 10;
+        dst_rect.y -= 10;
+        dst_rect.w += 20;
+        dst_rect.h += 20;
+    }
+
+    if (isIdiot) {
+        SDL_MessageBoxButtonData downloadButtonData = {.flags = SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, .buttonID = 0, .text = "Download" };
+        SDL_MessageBoxData msgData = {
+            .flags = SDL_MESSAGEBOX_ERROR, .window = wrapper.getWindow(), .title = "The Desktop Trojan",
+            .message = "Some of the game files are corrupted.\nPlease re-download the game at https://github.com/gaziduc/the-desktop-trojan to be able to really play it",
+            .numbuttons = 1,
+            .buttons = &downloadButtonData,
+            .colorScheme = nullptr
+        };
+        int buttonId = 0;
+        SDL_ShowMessageBox(&msgData, &buttonId);
+        if (buttonId == 0) {
+            ShellExecute(NULL, "open", "iexplore.exe", "https://github.com/gaziduc/you-are-an-idiot", NULL, SW_SHOWDEFAULT);
+        }
+    } else {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "The Desktop Trojan",
+                                 "Click on the new icon on your desktop!", wrapper.getWindow());
+    }
+
     return 0;
 }

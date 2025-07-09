@@ -1,5 +1,5 @@
 add_executable(${PROJECT_NAME})
 add_compile_options(-Wall -Wextra)
-target_sources(${PROJECT_NAME} PRIVATE main.cpp framerate.cpp framerate.h sdlwrapper.cpp sdlwrapper.h resources.cpp resources.h)
+target_sources(${PROJECT_NAME} PRIVATE main.cpp framerate.cpp framerate.h sdlwrapper.cpp sdlwrapper.h resources.cpp resources.h animation.cpp animation.h events.cpp events.h res.rc)
 target_link_libraries(${PROJECT_NAME} PRIVATE submodules)
 target_link_options(${PROJECT_NAME} PRIVATE "-mwindows")

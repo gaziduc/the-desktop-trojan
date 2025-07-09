@@ -4,9 +4,7 @@
 
 #include "sdlwrapper.h"
 
-SDLWrapper::SDLWrapper(SDL_Window *window, SDL_Renderer *renderer, TTF_TextEngine *text_engine,
-               const Resources &resources, FPSmanager *fps_manager)
-        : _resources(resources) {
+SDLWrapper::SDLWrapper(SDL_Window *window, SDL_Renderer *renderer, TTF_TextEngine *text_engine, FPSmanager *fps_manager) {
     _window = window;
     SDL_GetWindowSize(_window, &_width, &_height);
     _renderer = renderer;
@@ -36,8 +34,4 @@ TTF_TextEngine* SDLWrapper::getTextEngine() const {
 
 FPSmanager* SDLWrapper::getFPSManager() const {
     return _fps_manager;
-}
-
-const Resources& SDLWrapper::getResources() const {
-    return _resources;
 }
