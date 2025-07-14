@@ -8,11 +8,11 @@
 
 #include "sdlwrapper.h"
 
-void Events::handleQuitEvent(const SDLWrapper& wrapper, const Resources& resources) {
-    SDL_Event locEvent;
+void Events::handleEvents(const SDLWrapper& wrapper, const Resources& resources) {
+    SDL_Event event;
 
-    while (SDL_PollEvent(&locEvent)) {
-        switch (locEvent.type) {
+    while (SDL_PollEvent(&event)) {
+        switch (event.type) {
             case SDL_EVENT_QUIT:
                 TTF_DestroyRendererTextEngine(wrapper.getTextEngine());
                 SDL_DestroyRenderer(wrapper.getRenderer());
@@ -33,6 +33,19 @@ void Events::handleQuitEvent(const SDLWrapper& wrapper, const Resources& resourc
                 SDL_Quit();
                 exit(0);
                 break;
+            case SDL_EVENT_KEY_DOWN:
+                _keys[event.key.scancode] = true;
+                break;
+            case SDL_EVENT_KEY_UP:
+                _keys[event.key.scancode] = false;
+                break;
+            case SDL_EVENT_MOUSE_BUTTON_DOWN:
+                _mouseBtn[event.button.button] = true;
+                break;
+            case SDL_EVENT_MOUSE_BUTTON_UP:
+                _mouseBtn[event.button.button] = false;
+                break;
+
         }
     }
 }

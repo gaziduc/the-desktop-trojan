@@ -5,12 +5,14 @@
 #ifndef EVENTS_H
 #define EVENTS_H
 
-#include "sdlwrapper.h"
 #include "resources.h"
 
 class Events {
 public:
-    static void handleQuitEvent(const SDLWrapper& wrapper, const Resources& resources);
+    bool _keys[SDL_SCANCODE_COUNT] = { false };
+    bool _mouseBtn[5] = { false };
+
+    void handleEvents(const SDLWrapper& wrapper, const Resources& resources);
 };
 
 

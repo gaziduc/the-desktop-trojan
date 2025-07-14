@@ -3,7 +3,11 @@
 #include "sdlwrapper.h"
 #include "framerate.h"
 #include "resources.h"
+#include "events.h"
+#include "infoprovider.h"
+#include "stringutils.h"
 #include <shlobj.h>
+#include <Lmcons.h>
 #include <string>
 #include <filesystem>
 #include <fstream>
@@ -11,83 +15,73 @@
 #include <SDL3_ttf/SDL_ttf.h>
 #include <SDL3_mixer/SDL_mixer.h>
 
-#include "events.h"
-
 
 void initSDL() {
     if (!SDL_SetAppMetadata("The Desktop Trojan", "0.1.0", nullptr)) {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Couldn't set app metadata: %s", SDL_GetError());
     }
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) {
-        SDL_LogCritical(SDL_LOG_CATEGORY_APPLICATION, "Couldn't initialize SDL3: %s", SDL_GetError());
-        exit(1);
+        InfoProvider::onCriticalSDLError(nullptr, "Couldn't initialize SDL3");
     }
     if (!TTF_Init()) {
-        SDL_LogCritical(SDL_LOG_CATEGORY_APPLICATION, "Couldn't initialize SDL3_ttf: %s", SDL_GetError());
-        exit(1);
+        InfoProvider::onCriticalSDLError(nullptr, "Couldn't initialize SDL3_ttf");
     }
 
     MIX_InitFlags mix_flags = 0;
     MIX_InitFlags mix_init_flags = Mix_Init(mix_flags);
     if ((mix_flags & mix_init_flags) != mix_flags) {
-        SDL_LogCritical(SDL_LOG_CATEGORY_APPLICATION, "Couldn't initialize SDL3_mixer: %s", SDL_GetError());
-        exit(1);
+        InfoProvider::onCriticalSDLError(nullptr, "Couldn't initialize SDL3_mixer");
     }
 
     if (!Mix_OpenAudio(0, nullptr)) {
-        SDL_LogCritical(SDL_LOG_CATEGORY_APPLICATION, "Couldn't open audio with SDL3_mixer: %s", SDL_GetError());
-        exit(1);
+        InfoProvider::onCriticalSDLError(nullptr, "Couldn't open audio with SDL3_mixer");
     }
 }
 
-Resources loadResources(const SDLWrapper &wrapper) {
-    Mix_Chunk *count_sound = Resources::loadSound("resources/sfx/count.wav");
-    Mix_Chunk *explosion_sound = Resources::loadSound("resources/sfx/explosion.wav");
-    Mix_Chunk *error_sound = Resources::loadSound("resources/sfx/error.wav");
-    TTF_Font *font = Resources::loadFont("resources/fonts/impact.ttf", 200);
-    SDL_Texture *bomb = Resources::loadImage(wrapper, "resources/images/bomb.png");
-    SDL_Texture *explosion = Resources::loadImage(wrapper, "resources/images/explosion.png");
+void showMessage(SDLWrapper &wrapper, const Resources &resources, const char *message, SDL_Color fgColor,
+                 SDL_Color bgColor, bool hasOutline) {
+    unsigned int length = StringUtils::getUtf8StringSize(message);
+    Uint64 millisecondsPassed = 0;
+    int currentLength = 1;
+    while (true) {
+        wrapper.getEvents().handleEvents(wrapper, resources);
 
-    Resources resources(font, count_sound, explosion_sound, error_sound, bomb, explosion);
-    return resources;
-}
+        SDL_SetRenderDrawColor(wrapper.getRenderer(), bgColor.r, bgColor.g, bgColor.b, bgColor.a);
+        SDL_RenderClear(wrapper.getRenderer());
 
-SDLWrapper createSDLWrapper() {
-    SDL_DisplayID primary_display_id = SDL_GetPrimaryDisplay();
-    if (primary_display_id == 0) {
-        SDL_LogCritical(SDL_LOG_CATEGORY_APPLICATION, "Couldn't get primary display ID: %s", SDL_GetError());
-        exit(1);
+        TTF_SetFontOutline(resources._font, 0);
+        TTF_Text *usernameText = TTF_CreateText(wrapper.getTextEngine(), resources._font, message, currentLength);
+        TTF_SetTextColor(usernameText, fgColor.r, fgColor.g, fgColor.b, fgColor.a);
+        TTF_DrawRendererText(usernameText, 20, 20);
+        TTF_DestroyText(usernameText);
+
+        if (hasOutline) {
+            TTF_SetFontOutline(resources._font, 1);
+            TTF_Text *usernameTextOutline = TTF_CreateText(wrapper.getTextEngine(), resources._font, message,
+                                                           currentLength);
+            TTF_SetTextColor(usernameTextOutline, 0, 0, 0, 255);
+            TTF_DrawRendererText(usernameTextOutline, 18, 18);
+            TTF_DestroyText(usernameTextOutline);
+        }
+
+
+        SDL_RenderPresent(wrapper.getRenderer());
+
+        millisecondsPassed += SDL_framerateDelay(wrapper.getFPSManager());
+        if (currentLength >= length) {
+            if (wrapper.getEvents()._keys[SDL_SCANCODE_SPACE]) {
+                break;
+            }
+        } else if (millisecondsPassed >= 33) {
+            currentLength++;
+            millisecondsPassed = 0;
+            if (currentLength % 3 == 0) {
+                Mix_PlayChannel(-1, resources._count_sound, 0);
+            }
+        }
     }
-    const SDL_DisplayMode *display_mode = SDL_GetCurrentDisplayMode(primary_display_id);
-    if (display_mode == nullptr) {
-        SDL_LogCritical(SDL_LOG_CATEGORY_APPLICATION, "Couldn't get display mode: %s", SDL_GetError());
-        exit(1);
-    }
 
-    SDL_Window *window = SDL_CreateWindow("The Desktop Trojan", display_mode->w, display_mode->h,
-                                          SDL_WINDOW_FULLSCREEN | SDL_WINDOW_TRANSPARENT);
-    if (window == nullptr) {
-        SDL_LogCritical(SDL_LOG_CATEGORY_APPLICATION, "Couldn't create window: %s", SDL_GetError());
-        exit(1);
-    }
-    SDL_Renderer *renderer = SDL_CreateRenderer(window, nullptr);
-    if (renderer == nullptr) {
-        SDL_LogCritical(SDL_LOG_CATEGORY_APPLICATION, "Couldn't create renderer: %s", SDL_GetError());
-        exit(1);
-    }
-
-    TTF_TextEngine *text_engine = TTF_CreateRendererTextEngine(renderer);
-    if (text_engine == nullptr) {
-        SDL_LogCritical(SDL_LOG_CATEGORY_APPLICATION, "Couldn't create renderer text engine: %s", SDL_GetError());
-        exit(1);
-    }
-
-    FPSmanager *fps_manager = static_cast<FPSmanager *>(malloc(sizeof(FPSmanager)));
-    SDL_initFramerate(fps_manager);
-    SDL_setFramerate(fps_manager, 60);
-
-    const SDLWrapper wrapper(window, renderer, text_engine, fps_manager);
-    return wrapper;
+    TTF_SetFontOutline(resources._font, 0);
 }
 
 
@@ -102,27 +96,152 @@ int main(int argc, char *argv[]) {
         // At this point, we've been launched by the LOVE-LETTER-FOR-YOU.TXT.vbs, we need to change dir so the program loads resources correctly
         _wchdir(exe_path.parent_path().wstring().c_str());
 
-        locCountDown = 4000;
+        locCountDown = 2000;
     } else {
         locCountDown = 10000;
     }
 
-    bool isReallyIdiot = std::filesystem::exists("Tchernobyl.txt");
+    initSDL();
+    SDLWrapper wrapper = SDLWrapper::createSDLWrapper();
+    const Resources resources = Resources::loadResources(wrapper);
+    SDL_SetWindowIcon(wrapper.getWindow(), resources._icon);
+
+    wchar_t username[UNLEN + 1];
+    unsigned long size = UNLEN + 1;
+    GetUserNameW(username, &size);
+
+    std::string tchernobylFileName = "Tchernobyl.txt";
+    bool isReallyIdiot = std::filesystem::exists(tchernobylFileName);
     if (isReallyIdiot) {
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_WARNING, "The Desktop Trojan", "End of the demo. Thanks for playing!", nullptr);
+        std::wifstream tchernobylFile(tchernobylFileName);
+        std::wstring password;
+        getline(tchernobylFile, password);
+
+        std::wstring_convert<std::codecvt_utf8<wchar_t> > utf8;
+
+        Mix_Music *music = Mix_LoadMUS("resources/sfx/jenova.mp3");
+        if (music == nullptr) {
+            InfoProvider::onCriticalSDLError(wrapper.getWindow(), "Couldn't load music");
+        }
+
+
+        std::wstring correctPwd(L"DELETE FROM idiots WHERE name = '");
+        correctPwd.append(username).append(L"';");
+
+        if (password == correctPwd) {
+            std::wstring rowsAffected = password + L"\n\n1 row(s) affected.";
+            TTF_SetFontSize(resources._font, 20);
+            Mix_FadeInMusic(music, -1, 20000);
+            showMessage(wrapper, resources, utf8.to_bytes(rowsAffected).c_str(), {.r = 0, .g = 160, .b = 0, .a = 255},
+                        {.r = 128, .g = 0, .b = 0, .a = 255}, false);
+            TTF_SetFontSize(resources._font, 80);
+            showMessage(wrapper, resources,
+                        utf8.to_bytes(
+                            L"???: What? Why did you do that?\nYou're just an idiot anyway.\n\nTry to beat me now!").
+                        c_str(),
+                        {.r = 128, .g = 0, .b = 0, .a = 255}, {.r = 0, .g = 0, .b = 0, .a = 0}, true);
+
+            SDL_SetWindowFullscreen(wrapper.getWindow(), false);
+            SDL_SetWindowSize(wrapper.getWindow(), 800, 600);
+            SDL_SetWindowTitle(wrapper.getWindow(), "You are an idiot!");
+            Mix_FreeMusic(music);
+            music = Mix_LoadMUS("resources/sfx/idiot.mp3");
+            if (music == nullptr) {
+                InfoProvider::onCriticalSDLError(wrapper.getWindow(), "Couldn't load music");
+            }
+            Mix_PlayMusic(music, -1);
+            SDL_SetWindowBordered(wrapper.getWindow(), false);
+            bool windowDirRight = true;
+            bool windowDirDown = true;
+            while (true) {
+                int w;
+                int h;
+                SDL_GetWindowSize(wrapper.getWindow(), &w, &h);
+                wrapper.getEvents().handleEvents(wrapper, resources);
+                if (wrapper.getEvents()._mouseBtn[SDL_BUTTON_LEFT]) {
+                    wrapper.getEvents()._mouseBtn[SDL_BUTTON_LEFT] = false;
+
+                    SDL_SetWindowSize(wrapper.getWindow(), w / 1.5, h / 1.5);
+
+                    if (w <= 100) {
+                        SDL_SetWindowFullscreen(wrapper.getWindow(), true);
+                        SDL_SetWindowSize(wrapper.getWindow(), wrapper.getWindowWidth(), wrapper.getWindowHeight());
+                        showMessage(wrapper, resources, utf8.to_bytes(L"???: Wh..What? You killed me?\n\n\n").c_str(),{.r = 160, .g = 0, .b = 0, .a = 255},
+                        {.r = 0, .g = 0, .b = 0, .a = 0}, true);
+                        Mix_HaltMusic();
+                        showMessage(wrapper, resources, utf8.to_bytes(L"Thanks for playing this demo!\nDon't forget to put a comment on the game page\n(Be nice, I've done this game in less than 3 days)").c_str(),{.r = 255, .g = 255, .b = 255, .a = 255},
+                        {.r = 0, .g = 0, .b = 0, .a = 0}, true);
+                        return 0;
+                    }
+                }
+
+                int x;
+                int y;
+
+                SDL_GetWindowPosition(wrapper.getWindow(), &x, &y);
+                if (windowDirRight) {
+                    if (x >= wrapper.getWindowWidth() - w) {
+                        windowDirRight = false;
+                    }
+                } else if (x <= 0) {
+                    windowDirRight = true;
+                }
+                if (windowDirDown) {
+                    if (y >= wrapper.getWindowHeight() - h) {
+                        windowDirDown = false;
+                    }
+                } else if (y <= 0) {
+                    windowDirDown = true;
+                }
+                SDL_SetWindowPosition(wrapper.getWindow(), windowDirRight ? x + 10 : x - 10, windowDirDown ? y + 10 : y - 10);
+
+                // Clear screen
+                SDL_SetRenderDrawColor(wrapper.getRenderer(), 0, 0, 0, 255);
+                SDL_RenderClear(wrapper.getRenderer());
+
+                // Draw bomb
+                SDL_RenderTexture(wrapper.getRenderer(), resources._idiot, nullptr, nullptr);
+
+                // Draw everything to screen
+                SDL_RenderPresent(wrapper.getRenderer());
+
+                // Delay
+                SDL_framerateDelay(wrapper.getFPSManager());
+            }
+            return 0;
+        }
+
+        TTF_SetFontSize(resources._font, 80);
+
+        std::wstring wStr = L"???: Hello " + std::wstring(username) +
+                            L"!\n\nIf you managed to get\nhere, you might not\nbe as idiot as the\nboss thinks...\nMy name is Alice.\n\n(Press SPACE to continue)";
+        std::string utf8Message = utf8.to_bytes(wStr);
+        const char *message = utf8Message.c_str();
+
+        Mix_PlayMusic(music, -1);
+        showMessage(wrapper, resources, message, {.r = 0, .g = 160, .b = 0, .a = 255}, {.r = 0, .g = 0, .b = 0, .a = 0},
+                    true);
+        Mix_FadeOutMusic(20000);
+        showMessage(wrapper, resources, utf8.to_bytes(L"Alice: What the fuck is going on?").c_str(),
+                    {.r = 0, .g = 160, .b = 0, .a = 255}, {.r = 0, .g = 0, .b = 0, .a = 255}, true);
+        TTF_SetFontSize(resources._font, 20);
+        showMessage(wrapper, resources, utf8.to_bytes(L"???: I just killed your PC.\n\nGood luck.").c_str(),
+                    {.r = 192, .g = 0, .b = 0, .a = 255}, {.r = 0, .g = 0, .b = 0, .a = 255}, false);
+        showMessage(wrapper, resources,
+                    utf8.to_bytes(
+                        L"Alice: Psst, I know a flaw about this virus!\nActually, if you clear the Tchernobyl.txt file content and put the password in it, your PC will recover from those viruses.\nThe password text is located somewhere inside a file on your desktop...\nSorry, I can't tell you more...")
+                    .c_str(), {.r = 0, .g = 160, .b = 0, .a = 255}, {.r = 0, .g = 0, .b = 0, .a = 255}, false);
+
         return 0;
     }
-
-    initSDL();
-    const SDLWrapper wrapper = createSDLWrapper();
-    const Resources resources = loadResources(wrapper);
 
     if (isIdiot) {
         for (int i = 0; i < 15; i++) {
             Mix_PlayChannel(-1, resources._error_sound, 0);
             SDL_Delay(100);
         }
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "The Desktop Trojan", "You're really an idiot!", nullptr);
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "The Desktop Trojan", "You're really an idiot!",
+                                 wrapper.getWindow());
     }
 
     Mix_PlayChannel(-1, resources._error_sound, 0);
@@ -145,7 +264,8 @@ int main(int argc, char *argv[]) {
     i_love_you << L"Dim shell\n"
             << L"Set shell = WScript.CreateObject(\"WScript.Shell\")\n"
             << L"shell.Run(\"\"\"" << current_app_dir << L"\\" << exe_path.filename().c_str() << L"\"\" --idiot\")\n"
-            << L"Set shell = Nothing";
+            << L"Set shell = Nothing\n\n"
+            << L"'The PASSWORD is: DELETE FROM idiots WHERE name = '" << username << "';\n";
     i_love_you.close();
 
 
@@ -162,7 +282,7 @@ int main(int argc, char *argv[]) {
     bool isRedGoingUp = true;
 
     while (locCountDown > 0) {
-        Events::handleQuitEvent(wrapper, resources);
+        wrapper.getEvents().handleEvents(wrapper, resources);
 
         // Clear screen
         SDL_SetRenderDrawColor(wrapper.getRenderer(), red, 0, 0, 0);
@@ -219,13 +339,13 @@ int main(int argc, char *argv[]) {
 
     Mix_PlayChannel(-1, resources._explosion_sound, 0);
 
-    locCountDown = 2000;
+    locCountDown = 1400;
     dst_rect.x = wrapper.getWindowWidth() / 2;
     dst_rect.y = wrapper.getWindowHeight() / 2;
     dst_rect.w = 20;
     dst_rect.h = 20;
     while (locCountDown > 0) {
-        Events::handleQuitEvent(wrapper, resources);
+        wrapper.getEvents().handleEvents(wrapper, resources);
 
         // Clear screen
         SDL_SetRenderDrawColor(wrapper.getRenderer(), red, 0, 0, 0);
@@ -247,10 +367,13 @@ int main(int argc, char *argv[]) {
     }
 
     if (isIdiot) {
-        SDL_MessageBoxButtonData downloadButtonData = {.flags = SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, .buttonID = 0, .text = "Download" };
+        SDL_MessageBoxButtonData downloadButtonData = {
+            .flags = SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, .buttonID = 0, .text = "Download"
+        };
         SDL_MessageBoxData msgData = {
             .flags = SDL_MESSAGEBOX_ERROR, .window = wrapper.getWindow(), .title = "The Desktop Trojan",
-            .message = "Some of the game files are corrupted.\nPlease re-download the game at https://github.com/gaziduc/the-desktop-trojan to be able to really play it",
+            .message =
+            "Some of the game files are corrupted.\nPlease re-download the game to be able to really play it",
             .numbuttons = 1,
             .buttons = &downloadButtonData,
             .colorScheme = nullptr
@@ -258,7 +381,8 @@ int main(int argc, char *argv[]) {
         int buttonId = 0;
         SDL_ShowMessageBox(&msgData, &buttonId);
         if (buttonId == 0) {
-            ShellExecute(NULL, "open", "iexplore.exe", "https://github.com/gaziduc/you-are-an-idiot", NULL, SW_SHOWDEFAULT);
+            ShellExecute(nullptr, "open", "https://github.com/gaziduc/you-are-an-idiot", "", nullptr,
+                         SW_SHOWDEFAULT);
         }
     } else {
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "The Desktop Trojan",

@@ -8,8 +8,8 @@
 #include <SDL3/SDL.h>
 #include <SDL3_ttf/SDL_ttf.h>
 
+#include "events.h"
 #include "framerate.h"
-#include "resources.h"
 
 class SDLWrapper {
 private:
@@ -19,9 +19,12 @@ private:
     SDL_Renderer*_renderer;
     TTF_TextEngine* _text_engine;
     FPSmanager* _fps_manager;
+    Events _events;
 
 public:
-    SDLWrapper(SDL_Window *window, SDL_Renderer *renderer, TTF_TextEngine *text_engine, FPSmanager *fps_manager);
+    static SDLWrapper createSDLWrapper();
+
+    SDLWrapper(SDL_Window *window, SDL_Renderer *renderer, TTF_TextEngine *text_engine, FPSmanager *fps_manager, const Events& events);
 
     SDL_Window *getWindow() const;
 
@@ -34,6 +37,8 @@ public:
     TTF_TextEngine *getTextEngine() const;
 
     FPSmanager *getFPSManager() const;
+
+    Events& getEvents();
 };
 
 
