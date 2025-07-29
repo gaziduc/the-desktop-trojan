@@ -38,7 +38,8 @@ enum launch_state {
     FIRST_LAUNCH = 0,
     VBS_LAUNCH,
     CIH_LAUNCH,
-    PASSWORD_CORRECT_LAUNCH
+    PASSWORD_CORRECT_LAUNCH,
+    THE_END_LAUNCH
 };
 
 enum lifecycle {
@@ -63,6 +64,7 @@ struct app_state {
     std::vector<std::string> argv_str;
     std::filesystem::path exe_path;
     wchar_t username[UNLEN + 1];
+    wchar_t current_app_dir[MAX_PATH];
     // SDL3
     SDL_Window *window = nullptr;
     int window_width;
@@ -208,11 +210,19 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
     state.password = correct_password;
 
 
-    if (argc > 1 && argv_str[1] == "--idiot") {
-        // At this point, we've been launched by the LOVE-LETTER-FOR-YOU.TXT.vbs, we need to change dir so the program loads resources correctly
+    if (argc > 1) {
+        // At this point, we've been launched by the LOVE-LETTER-FOR-YOU.TXT.vbs or from startup.
+        // we need to change dir so the program loads resources correctly
         _wchdir(state.exe_path.parent_path().wstring().c_str());
-        state.launch_state = VBS_LAUNCH;
-        state.countdown_ms = 2000;
+
+        if (argv_str[1] == "--idiot") {
+            state.launch_state = VBS_LAUNCH;
+            state.countdown_ms = 2000;
+        } else if (argv_str[1] == "--really-idiot") {
+            state.launch_state = THE_END_LAUNCH;
+        }
+
+
     } else if (std::filesystem::exists(CIH_FILENAME)) {
         std::wifstream cih_file(CIH_FILENAME);
         if (!cih_file.is_open()) {
@@ -282,6 +292,8 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
         InfoProvider::on_critical_SDL_error(window, "Couldn't load font");
         return SDL_APP_FAILURE;
     }
+
+    GetCurrentDirectoryW(MAX_PATH, state.current_app_dir);
 
     state.last_ticks = SDL_GetTicks();
     state.frame_count = 0;
@@ -413,13 +425,12 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
                 std::wstring i_love_you_absolute_filename(desktop_path);
                 i_love_you_absolute_filename += L"\\LOVE-LETTER-FOR-YOU.TXT.vbs";
 
-                wchar_t current_app_dir[MAX_PATH] = {0};
-                GetCurrentDirectoryW(MAX_PATH, current_app_dir);
+
 
                 std::wofstream i_love_you_file(i_love_you_absolute_filename.c_str());
                 i_love_you_file << L"Dim shell\n"
                         << L"Set shell = WScript.CreateObject(\"WScript.Shell\")\n"
-                        << L"shell.Run(\"\"\"" << current_app_dir << L"\\" << state->exe_path.filename().c_str() <<
+                        << L"shell.Run(\"\"\"" << state->current_app_dir << L"\\" << state->exe_path.filename().c_str() <<
                         L"\"\" --idiot\")\n"
                         << L"Set shell = Nothing\n\n"
                         << L"'The PASSWORD is: DELETE FROM idiots WHERE name = '" << state->username << "';\n";
@@ -466,7 +477,15 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
                                               {.r = 128, .g = 0, .b = 0, .a = 255}, false, 20));
             messages.push_back(create_message(
                 L"?????: What? Why did you do that?\nYou're just an idiot anyway.\n\nTry to beat me now!",
-                {.r = 128, .g = 0, .b = 0, .a = 255}, {.r = 0, .g = 0, .b = 0, .a = 0}, true, 80, [state] { state->start_your_are_an_idiot_phase = true; }));
+                {.r = 192, .g = 0, .b = 0, .a = SDL_ALPHA_OPAQUE}, {.r = 0, .g = 0, .b = 0, .a = SDL_ALPHA_TRANSPARENT}, true, 80, [state] { state->start_your_are_an_idiot_phase = true; }));
+            set_messages(state, messages);
+        } else if (state->launch_state == THE_END_LAUNCH) {
+            std::vector<message> messages;
+            messages.push_back(create_message((std::wstring(state->username) + L", thanks a lot for playing the demo.\n\nDon't forget to let a comment on the webpage!").c_str(), {.r = 255, .g = 255, .b = 255, .a = SDL_ALPHA_OPAQUE}, {.r = 0, .g = 0, .b = 0, .a = SDL_ALPHA_TRANSPARENT}, true, 80, [] {
+                HKEY hkey;
+                RegOpenKeyW(HKEY_CURRENT_USER, L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", &hkey);
+                RegDeleteValueW(hkey, L"The Desktop Trojan");
+            }));
             set_messages(state, messages);
         }
         state->lifecycle = MIDDLE;
@@ -540,7 +559,7 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
                     state->lifecycle = END;
                 }
             }
-        } else if (state->launch_state == CIH_LAUNCH) {
+        } else if (state->launch_state == CIH_LAUNCH || state->launch_state == THE_END_LAUNCH) {
             if (state->is_in_message) {
                 show_message(state);
             } else {
@@ -589,6 +608,20 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
                     return SDL_APP_FAILURE;
                 }
                 Mix_PlayMusic(state->music, -1);
+
+                HKEY hkey = nullptr;
+                std::wstring absolute_exe_path_with_params = L"\"" + std::wstring(state->current_app_dir) + L"\\" + state->exe_path.filename().c_str() + L"\" --really-idiot";
+                // Creates a key
+                LONG create_status = RegCreateKeyW(HKEY_CURRENT_USER, L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", &hkey);
+                LONG status = RegSetValueExW(hkey,
+                    L"The Desktop Trojan",
+                    0,
+                    REG_SZ,
+                    reinterpret_cast<const BYTE *>(absolute_exe_path_with_params.c_str()),
+                    (absolute_exe_path_with_params.size() + 1) * sizeof(wchar_t)
+                    );
+
+                ShellExecute(nullptr, "open", "shutdown", "/r /t 40", nullptr, SW_SHOWDEFAULT);
 
                 state->start_camera_phase = false;
                 state->is_in_camera_phase = true;
@@ -700,6 +733,9 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
                 ShellExecute(nullptr, "open", "https://github.com/gaziduc/you-are-an-idiot", "", nullptr,
                              SW_SHOWDEFAULT);
             }
+        } else if (state->launch_state == THE_END_LAUNCH) {
+            ShellExecute(nullptr, "open", "https://gaziduc.itch.io/the-desktop-trojan", "", nullptr,
+                             SW_SHOWDEFAULT);
         }
 
         return SDL_APP_SUCCESS;
