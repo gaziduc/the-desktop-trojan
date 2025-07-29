@@ -39,3 +39,6 @@
 
 # Debug information files
 *.dwo
+
+# IntelliJ
+.idea

@@ -7,13 +7,14 @@
 #include <string>
 #include <SDL3/SDL.h>
 
-void InfoProvider::onCriticalSDLError(SDL_Window* window, const std::string& msg) {
-    std::string msgString = msg + ": " + SDL_GetError();
-    const char* msgStr = msgString.c_str();
+void InfoProvider::on_critical_SDL_error(SDL_Window* window, const std::string& msg) {
+    on_critical_error(window, msg + ": " + SDL_GetError());
+}
+
+void InfoProvider::on_critical_error(SDL_Window* window, const std::string& msg) {
+    const char* msgStr = msg.c_str();
     // Log
     SDL_LogCritical(SDL_LOG_CATEGORY_APPLICATION, msgStr);
     // Show message to user
     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "The Desktop Trojan", msgStr, window);
-    // Quit program
-    exit(1);
 }

@@ -11,7 +11,8 @@
 
 class InfoProvider {
 public:
-    static void onCriticalSDLError(SDL_Window* window, const std::string& msg);
+    static void on_critical_SDL_error(SDL_Window* window, const std::string& msg);
+    static void on_critical_error(SDL_Window* window, const std::string& msg);
 };
 
 
