@@ -22,4 +22,4 @@ Or for Bash users:
  ./submodules/SDL_image/external/download.sh
 ```
 
-Then you can build!
+Then you can build with cmake!
