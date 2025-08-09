@@ -10,3 +10,6 @@
 [submodule "submodules/SDL_image"]
 	path = submodules/SDL_image
 	url = https://github.com/libsdl-org/SDL_image.git
+[submodule "submodules/libzip"]
+	path = submodules/libzip
+	url = https://github.com/nih-at/libzip

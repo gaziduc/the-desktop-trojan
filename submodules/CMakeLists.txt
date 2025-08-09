@@ -38,7 +38,10 @@ add_subdirectory(SDL EXCLUDE_FROM_ALL)
 add_subdirectory(SDL_ttf EXCLUDE_FROM_ALL)
 add_subdirectory(SDL_mixer EXCLUDE_FROM_ALL)
 add_subdirectory(SDL_image EXCLUDE_FROM_ALL)
+set(ZLIB_LIBRARY ${CMAKE_CURRENT_BINARY_DIR}/zlib)
+set(ZLIB_INCLUDE_DIR ${CMAKE_CURRENT_BINARY_DIR}/zlib)
+add_subdirectory(libzip EXCLUDE_FROM_ALL)
 
 add_library(submodules INTERFACE)
-target_link_libraries(submodules INTERFACE SDL3::SDL3 SDL3_ttf::SDL3_ttf SDL3_mixer::SDL3_mixer SDL3_image::SDL3_image)
+target_link_libraries(submodules INTERFACE SDL3::SDL3 SDL3_ttf::SDL3_ttf SDL3_mixer::SDL3_mixer SDL3_image::SDL3_image zip)
 

@@ -11,7 +11,9 @@
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <iostream>
 #include <vector>
+#include <zip.h>
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 #include <SDL3_image/SDL_image.h>
@@ -39,6 +41,8 @@ enum launch_state {
     VBS_LAUNCH,
     CIH_LAUNCH,
     PASSWORD_CORRECT_LAUNCH,
+    AFTER_REBOOT_LAUNCH,
+    ZIP_LAUNCH,
     THE_END_LAUNCH
 };
 
@@ -105,6 +109,8 @@ struct app_state {
     SDL_FRect explosion_coordinates;
     bool start_camera_phase = false;
     bool is_in_camera_phase = false;
+    int last_random = -1;
+    bool color_going_up = true;
 };
 
 bool is_countdown_step(launch_state launch_state);
@@ -219,7 +225,9 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
             state.launch_state = VBS_LAUNCH;
             state.countdown_ms = 2000;
         } else if (argv_str[1] == "--really-idiot") {
-            state.launch_state = THE_END_LAUNCH;
+            state.launch_state = AFTER_REBOOT_LAUNCH;
+        } else if (argv_str[1].ends_with(".zip")) {
+            state.launch_state = ZIP_LAUNCH;
         }
 
 
@@ -479,14 +487,54 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
                 L"?????: What? Why did you do that?\nYou're just an idiot anyway.\n\nTry to beat me now!",
                 {.r = 192, .g = 0, .b = 0, .a = SDL_ALPHA_OPAQUE}, {.r = 0, .g = 0, .b = 0, .a = SDL_ALPHA_TRANSPARENT}, true, 80, [state] { state->start_your_are_an_idiot_phase = true; }));
             set_messages(state, messages);
-        } else if (state->launch_state == THE_END_LAUNCH) {
+        } else if (state->launch_state == AFTER_REBOOT_LAUNCH) {
+            int error_code = 0;
+            // Create zip
+            zip *z = zip_open("ARGV.zip", ZIP_CREATE, &error_code);
+            char buffer[] = "shutdown /a";
+            zip_source_t *source = zip_source_buffer(z, buffer, strlen(buffer), 0);
+            zip_file_add(z, "ARGV.txt", source, 0);
+            zip_file_set_encryption(z, 0, ZIP_EM_AES_256, "You are the idiot!");
+            zip_close(z);
+
             std::vector<message> messages;
-            messages.push_back(create_message((std::wstring(state->username) + L", thanks a lot for playing the demo.\n\nDon't forget to let a comment on the webpage!").c_str(), {.r = 255, .g = 255, .b = 255, .a = SDL_ALPHA_OPAQUE}, {.r = 0, .g = 0, .b = 0, .a = SDL_ALPHA_TRANSPARENT}, true, 80, [] {
-                HKEY hkey;
-                RegOpenKeyW(HKEY_CURRENT_USER, L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", &hkey);
-                RegDeleteValueW(hkey, L"The Desktop Trojan");
-            }));
-            set_messages(state, messages);
+            messages.push_back(create_message(
+                                   (L"Alice: " + std::wstring(state->username) + L", to defeat the trojan, you need to\nfind the ARGV.zip file i cerated, which is next to\nthe-desktop-trojan.exe file.\n\nDo not try to open the file directly!\nJust drag and drop it onto the-desktop-trojan.exe and you will see\nthe magic happening.\n\nIf you don't do this your PC will reboot again.").c_str(),
+                                   {.r = 255, .g = 255, .b = 255, .a = SDL_ALPHA_OPAQUE}, {
+                                       .r = 0, .g = 0, .b = 0, .a = SDL_ALPHA_TRANSPARENT
+                                   }, true, 80));
+
+
+            //                    messages.push_back(create_message((std::wstring(state->username) + L", thanks a lot for playing the demo.\n\nDon't forget to let a comment on the webpage!").c_str(), {.r = 255, .g = 255, .b = 255, .a = SDL_ALPHA_OPAQUE}, {.r = 0, .g = 0, .b = 0, .a = SDL_ALPHA_TRANSPARENT}, true, 80, [] {
+            //                        HKEY hkey;
+            //                        RegOpenKeyW(HKEY_CURRENT_USER, L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", &hkey);
+            //                        RegDeleteValueW(hkey, L"The Desktop Trojan");
+            //                    }));
+            // set_messages(state, messages);
+        } else if (state->launch_state == ZIP_LAUNCH) {
+            // Open zip in parameter
+            int error_code = 0;
+            zip *z = zip_open(state->argv_str[1].c_str(), 0, &error_code);
+
+            struct zip_stat st;
+            zip_stat_init(&st);
+            zip_stat(z, "ARGV.txt", 0, &st);
+
+            // Allocate memory for its uncompressed contents
+            char *content = new char[st.size];
+
+            zip_file *file = zip_fopen_encrypted(z, "ARGV.txt", 0, "You are the idiot!");
+
+            zip_fread(file, content, st.size);
+            zip_fclose(file);
+
+            // Close the archive
+            zip_close(z);
+
+            std::string content_str(content);
+            if (content_str == "shutdown /a") {
+                SDL_LogCritical(SDL_LOG_CATEGORY_APPLICATION, "test\n");
+            }
         }
         state->lifecycle = MIDDLE;
     } else if (state->lifecycle == MIDDLE) {
@@ -559,7 +607,7 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
                     state->lifecycle = END;
                 }
             }
-        } else if (state->launch_state == CIH_LAUNCH || state->launch_state == THE_END_LAUNCH) {
+        } else if (state->launch_state == CIH_LAUNCH || state->launch_state == AFTER_REBOOT_LAUNCH) {
             if (state->is_in_message) {
                 show_message(state);
             } else {
@@ -570,7 +618,7 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
                 show_message(state);
             } else if (state->start_camera_phase) {
                 SDL_ShowSimpleMessageBox(
-                    0, "The Desktop Trojan",
+                    SDL_MESSAGEBOX_INFORMATION, "The Desktop Trojan",
                     "I'm going to show you what's an idiot!",
                     state->window);
 
@@ -621,7 +669,7 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
                     (absolute_exe_path_with_params.size() + 1) * sizeof(wchar_t)
                     );
 
-                ShellExecute(nullptr, "open", "shutdown", "/r /t 40", nullptr, SW_SHOWDEFAULT);
+                ShellExecute(nullptr, "open", "shutdown", "/r /t 45", nullptr, SW_SHOWDEFAULT);
 
                 state->start_camera_phase = false;
                 state->is_in_camera_phase = true;
@@ -680,8 +728,29 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
                 const std::string str = utf8_converter.to_bytes((std::wstring(state->username) + L" is an idiot!     →").c_str());
                 TTF_SetFontOutline(state->font, 0);
                 TTF_Text *text = TTF_CreateText(state->text_engine, state->font, str.c_str(), 0);
-                TTF_SetTextColor(text, std::rand() % 256, std::rand() % 256, std::rand() % 256, SDL_ALPHA_OPAQUE);
-                TTF_DrawRendererText(text, 100, 100);
+                for (int i = 1; i <= 5; i++) {
+                    if (state->last_random == -1) {
+                        state->last_random = std::rand() % 256;
+                    } else {
+                        if (state->color_going_up) {
+                            state->last_random += 4;
+                            if (state->last_random > 255) {
+                                state->color_going_up = false;
+                                state->last_random = 255;
+                            }
+                        } else {
+                            state->last_random -= 4;
+                            if (state->last_random < 0) {
+                                state->color_going_up = true;
+                                state->last_random = 0;
+                            }
+                        }
+
+                    }
+                    TTF_SetTextColor(text,state->last_random, state->last_random, state->last_random, state->last_random);
+                    TTF_DrawRendererText(text, 450, i * 100);
+                }
+
                 TTF_DestroyText(text);
 
                 SDL_RenderRect(state->renderer, &state->camera_viewport);
