@@ -27,7 +27,7 @@ set(SDLIMAGE_XV OFF)
 # SDL_ttf features
 set(SDLTTF_HARFBUZZ OFF)
 set(SDLTTF_PLUTOSVG OFF)
-# SDL_image formats
+# SDL_mixer formats
 set(SDLMIXER_FLAC OFF)
 set(SDLMIXER_GME OFF)
 set(SDLMIXER_MOD OFF)
@@ -38,10 +38,10 @@ add_subdirectory(SDL EXCLUDE_FROM_ALL)
 add_subdirectory(SDL_ttf EXCLUDE_FROM_ALL)
 add_subdirectory(SDL_mixer EXCLUDE_FROM_ALL)
 add_subdirectory(SDL_image EXCLUDE_FROM_ALL)
-set(ZLIB_LIBRARY ${CMAKE_CURRENT_BINARY_DIR}/zlib)
-set(ZLIB_INCLUDE_DIR ${CMAKE_CURRENT_BINARY_DIR}/zlib)
+set(ZLIB_LIBRARY ${CMAKE_SOURCE_DIR}/deps/zlib/lib/libzlib.dll.a)
+set(ZLIB_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/deps/zlib/include)
 add_subdirectory(libzip EXCLUDE_FROM_ALL)
 
 add_library(submodules INTERFACE)
-target_link_libraries(submodules INTERFACE SDL3::SDL3 SDL3_ttf::SDL3_ttf SDL3_mixer::SDL3_mixer SDL3_image::SDL3_image zip)
+target_link_libraries(submodules INTERFACE SDL3::SDL3 SDL3_ttf::SDL3_ttf SDL3_mixer::SDL3_mixer SDL3_image::SDL3_image libzip::zip)
 

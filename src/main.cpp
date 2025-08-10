@@ -1,6 +1,8 @@
 #define SDL_MAIN_USE_CALLBACKS 1
 
 #define CIH_FILENAME "CIH.txt"
+#define ARGV_ZIP_FILENAME "ARGV.zip"
+#define ARGV_FILENAME "ARGV.txt"
 
 #include "infoprovider.h"
 #include "stringutils.h"
@@ -11,7 +13,6 @@
 #include <filesystem>
 #include <fstream>
 #include <functional>
-#include <iostream>
 #include <vector>
 #include <zip.h>
 #include <SDL3/SDL.h>
@@ -42,8 +43,7 @@ enum launch_state {
     CIH_LAUNCH,
     PASSWORD_CORRECT_LAUNCH,
     AFTER_REBOOT_LAUNCH,
-    ZIP_LAUNCH,
-    THE_END_LAUNCH
+    CORRECT_ZIP_LAUNCH
 };
 
 enum lifecycle {
@@ -227,7 +227,32 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
         } else if (argv_str[1] == "--really-idiot") {
             state.launch_state = AFTER_REBOOT_LAUNCH;
         } else if (argv_str[1].ends_with(".zip")) {
-            state.launch_state = ZIP_LAUNCH;
+            // Open zip in parameter
+            int error_code = 0;
+            zip *z = zip_open(state.argv_str[1].c_str(), 0, &error_code);
+
+            struct zip_stat st;
+            zip_stat_init(&st);
+            zip_stat(z, ARGV_FILENAME, 0, &st);
+
+            // Allocate memory for its uncompressed contents
+            char *content = new char[st.size + 1];
+
+            zip_file *file = zip_fopen_encrypted(z, ARGV_FILENAME, 0, "You are the idiot!");
+
+            content[st.size] = '\0';
+            zip_fread(file, content, st.size);
+            zip_fclose(file);
+
+            // Close the archive
+            zip_close(z);
+
+            std::string content_str(content);
+            if (content_str == "shutdown /a") {
+                state.launch_state = CORRECT_ZIP_LAUNCH;
+            } else {
+                state.launch_state = AFTER_REBOOT_LAUNCH;
+            }
         }
 
 
@@ -490,51 +515,32 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
         } else if (state->launch_state == AFTER_REBOOT_LAUNCH) {
             int error_code = 0;
             // Create zip
-            zip *z = zip_open("ARGV.zip", ZIP_CREATE, &error_code);
+            zip *z = zip_open(ARGV_ZIP_FILENAME, ZIP_CREATE, &error_code);
             char buffer[] = "shutdown /a";
             zip_source_t *source = zip_source_buffer(z, buffer, strlen(buffer), 0);
-            zip_file_add(z, "ARGV.txt", source, 0);
+            zip_file_add(z, ARGV_FILENAME, source, 0);
             zip_file_set_encryption(z, 0, ZIP_EM_AES_256, "You are the idiot!");
             zip_close(z);
 
             std::vector<message> messages;
             messages.push_back(create_message(
-                                   (L"Alice: " + std::wstring(state->username) + L", to defeat the trojan, you need to\nfind the ARGV.zip file i cerated, which is next to\nthe-desktop-trojan.exe file.\n\nDo not try to open the file directly!\nJust drag and drop it onto the-desktop-trojan.exe and you will see\nthe magic happening.\n\nIf you don't do this your PC will reboot again.").c_str(),
-                                   {.r = 255, .g = 255, .b = 255, .a = SDL_ALPHA_OPAQUE}, {
-                                       .r = 0, .g = 0, .b = 0, .a = SDL_ALPHA_TRANSPARENT
-                                   }, true, 80));
+                (L"Alice: " + std::wstring(state->username) +
+                 L", to defeat the trojan, you need to\nfind the " ARGV_ZIP_FILENAME " file I created, which is next to\nthe-desktop-trojan.exe file.\n\nDo not try to open the file directly!\nJust drag and drop it onto the-desktop-trojan.exe\nand you will see the magic happening.\nIf you don't do this your PC will reboot again.")
+                .c_str(),
+                {.r = 0, .g = 160, .b = 0, .a = SDL_ALPHA_OPAQUE}, {
+                    .r = 0, .g = 0, .b = 0, .a = SDL_ALPHA_TRANSPARENT
+                }, true, 80, [] {
+                    HKEY hkey;
+                    RegOpenKeyW(HKEY_CURRENT_USER, L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", &hkey);
+                    RegDeleteValueW(hkey, L"The Desktop Trojan");
+                }));
 
-
-            //                    messages.push_back(create_message((std::wstring(state->username) + L", thanks a lot for playing the demo.\n\nDon't forget to let a comment on the webpage!").c_str(), {.r = 255, .g = 255, .b = 255, .a = SDL_ALPHA_OPAQUE}, {.r = 0, .g = 0, .b = 0, .a = SDL_ALPHA_TRANSPARENT}, true, 80, [] {
-            //                        HKEY hkey;
-            //                        RegOpenKeyW(HKEY_CURRENT_USER, L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", &hkey);
-            //                        RegDeleteValueW(hkey, L"The Desktop Trojan");
-            //                    }));
-            // set_messages(state, messages);
-        } else if (state->launch_state == ZIP_LAUNCH) {
-            // Open zip in parameter
-            int error_code = 0;
-            zip *z = zip_open(state->argv_str[1].c_str(), 0, &error_code);
-
-            struct zip_stat st;
-            zip_stat_init(&st);
-            zip_stat(z, "ARGV.txt", 0, &st);
-
-            // Allocate memory for its uncompressed contents
-            char *content = new char[st.size];
-
-            zip_file *file = zip_fopen_encrypted(z, "ARGV.txt", 0, "You are the idiot!");
-
-            zip_fread(file, content, st.size);
-            zip_fclose(file);
-
-            // Close the archive
-            zip_close(z);
-
-            std::string content_str(content);
-            if (content_str == "shutdown /a") {
-                SDL_LogCritical(SDL_LOG_CATEGORY_APPLICATION, "test\n");
-            }
+            set_messages(state, messages);
+        } else if (state->launch_state == CORRECT_ZIP_LAUNCH) {
+            std::vector<message> messages;
+            messages.push_back(create_message(L"?????: Wh...Why?", {.r = 192, .g = 0, .b = 0, .a = SDL_ALPHA_OPAQUE}, {.r = 0, .g = 0, .b = 0, .a = SDL_ALPHA_TRANSPARENT}, true, 80));
+            messages.push_back(create_message((std::wstring(state->username) + L", thanks a lot for playing the demo.\n\nDon't forget to let a comment on the webpage!").c_str(), {.r = 255, .g = 255, .b = 255, .a = SDL_ALPHA_OPAQUE}, {.r = 0, .g = 0, .b = 0, .a = SDL_ALPHA_TRANSPARENT}, true, 80));
+            set_messages(state, messages);
         }
         state->lifecycle = MIDDLE;
     } else if (state->lifecycle == MIDDLE) {
@@ -607,7 +613,7 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
                     state->lifecycle = END;
                 }
             }
-        } else if (state->launch_state == CIH_LAUNCH || state->launch_state == AFTER_REBOOT_LAUNCH) {
+        } else if (state->launch_state == CIH_LAUNCH || state->launch_state == AFTER_REBOOT_LAUNCH || state->launch_state == CORRECT_ZIP_LAUNCH) {
             if (state->is_in_message) {
                 show_message(state);
             } else {
@@ -802,7 +808,7 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
                 ShellExecute(nullptr, "open", "https://github.com/gaziduc/you-are-an-idiot", "", nullptr,
                              SW_SHOWDEFAULT);
             }
-        } else if (state->launch_state == THE_END_LAUNCH) {
+        } else if (state->launch_state == CORRECT_ZIP_LAUNCH) {
             ShellExecute(nullptr, "open", "https://gaziduc.itch.io/the-desktop-trojan", "", nullptr,
                              SW_SHOWDEFAULT);
         }
