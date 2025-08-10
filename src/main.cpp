@@ -525,7 +525,7 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
             std::vector<message> messages;
             messages.push_back(create_message(
                 (L"Alice: " + std::wstring(state->username) +
-                 L", to defeat the trojan, you need to\nfind the " ARGV_ZIP_FILENAME " file I created, which is next to\nthe-desktop-trojan.exe file.\n\nDo not try to open the file directly!\nJust drag and drop it onto the-desktop-trojan.exe\nand you will see the magic happening.\nIf you don't do this your PC will reboot again.")
+                 L", to defeat the trojan, you need to\nfind the " ARGV_ZIP_FILENAME " file I created, which is next to\nthe-desktop-trojan.exe file.\n\nDo not try to open the file directly!\nJust drag and drop it onto the-desktop-trojan.exe\nand you will see the magic happening.")
                 .c_str(),
                 {.r = 0, .g = 160, .b = 0, .a = SDL_ALPHA_OPAQUE}, {
                     .r = 0, .g = 0, .b = 0, .a = SDL_ALPHA_TRANSPARENT
