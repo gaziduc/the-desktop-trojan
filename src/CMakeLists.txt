@@ -1,5 +1,5 @@
 add_executable(${PROJECT_NAME})
 add_compile_options(-Wall -Wextra)
-target_sources(${PROJECT_NAME} PRIVATE main.cpp res.rc stringutils.cpp stringutils.h infoprovider.cpp infoprovider.h)
+target_sources(${PROJECT_NAME} PRIVATE main.cpp res.rc stringutils.cpp stringutils.h infoprovider.cpp infoprovider.h effects.h)
 target_link_libraries(${PROJECT_NAME} PRIVATE submodules)
 target_link_options(${PROJECT_NAME} PRIVATE "-mwindows")
